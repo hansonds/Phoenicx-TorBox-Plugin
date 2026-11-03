@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Phoenicx TorBox</title>
+</head>
+<body>
+<div id="PhoenicxTorBoxPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox,emby-textarea">
+    <div data-role="content">
+        <div class="content-primary">
+            <h2 class="sectionTitle">Phoenicx TorBox</h2>
+            <p>Your TorBox movies and series as Jellyfin libraries, played straight from TorBox. Watch history stays on this server for every user.</p>
+
+            <div id="ptbStatus" style="padding:1em;border-radius:8px;background:rgba(255,255,255,0.06);margin:1em 0;line-height:1.6">Loading…</div>
+
+            <form id="PhoenicxTorBoxForm">
+                <div class="inputContainer">
+                    <input is="emby-input" type="password" id="TorBoxApiKey" label="TorBox API key" autocomplete="off" />
+                    <div class="fieldDescription">torbox.app → Settings → API key. It stays on this server; clients never see it.</div>
+                </div>
+                <div class="inputContainer">
+                    <input is="emby-input" type="text" id="PublicServerUrl" label="Public server address" />
+                    <div class="fieldDescription">The address your apps use to reach this server, e.g. https://media.phoenicx.org</div>
+                </div>
+                <div class="inputContainer">
+                    <input is="emby-input" type="text" id="LibraryPath" label="Library folder (optional)" />
+                    <div class="fieldDescription">Leave empty to use the default folder shown above.</div>
+                </div>
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label><input is="emby-checkbox" type="checkbox" id="DirectToClients" /><span>Play straight from TorBox</span></label>
+                    <div class="fieldDescription checkboxFieldDescription">Clients open the TorBox link themselves, so the video does not pass through this server.</div>
+                </div>
+                <div class="checkboxContainer">
+                    <label><input is="emby-checkbox" type="checkbox" id="IncludeUsenet" /><span>Include usenet downloads</span></label>
+                </div>
+                <div class="checkboxContainer">
+                    <label><input is="emby-checkbox" type="checkbox" id="IncludeWebDownloads" /><span>Include web downloads</span></label>
+                </div>
+                <div class="inputContainer">
+                    <textarea is="emby-textarea" id="NameFixes" label="Name fixes" rows="5" style="font-family:monospace"></textarea>
+                    <div class="fieldDescription">One per line: <code>text in the TorBox name = Title (Year)</code>. Example: <code>Kaithi.2019 = Kaithi (2019)</code></div>
+                </div>
+                <div>
+                    <button is="emby-button" type="submit" class="raised button-submit block"><span>Save</span></button>
+                    <button is="emby-button" type="button" id="ptbTest" class="raised block"><span>Test API key</span></button>
+                    <button is="emby-button" type="button" id="ptbSync" class="raised block"><span>Sync now</span></button>
+                </div>
+            </form>
+
+            <p style="margin-top:2em;opacity:.7">Phoenicx TorBox by Hanson — <a href="https://phoenicx.org" target="_blank" rel="noopener" class="button-link">phoenicx.org</a></p>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        (function () {
+            var pluginId = 'd793e3f9-364f-4640-9ebb-7c807bfcb90e';
+            var page = document.querySelector('#PhoenicxTorBoxPage');
+            var fields = ['TorBoxApiKey', 'PublicServerUrl', 'LibraryPath', 'NameFixes'];
+            var checks = ['DirectToClients', 'IncludeUsenet', 'IncludeWebDownloads'];
+
+            function esc(s) {
+                return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+                    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+                });
+            }
+
+            function getJson(path) {
+                return ApiClient.ajax({ type: 'GET', url: ApiClient.getUrl(path), dataType: 'json' });
+            }
+
+            function loadStatus() {
+                getJson('PhoenicxTorBox/Status').then(function (s) {
+                    var last = s.last || {};
+                    var when = last.FinishedUtc || last.finishedUtc;
+                    var ok = last.Ok !== undefined ? last.Ok : last.ok;
+                    var msg = last.Message || last.message || '';
+                    var skipped = last.Skipped || last.skipped || [];
+                    var html = '<b>Add these two folders as libraries</b> (Dashboard → Libraries → Add Media Library):<br>' +
+                        'Movies: <code>' + esc(s.moviesPath) + '</code><br>' +
+                        'Shows: <code>' + esc(s.showsPath) + '</code><br><br>' +
+                        '<b>Last sync:</b> ' + (when ? new Date(when).toLocaleString() + ' — ' : '') +
+                        '<span style="color:' + (when ? (ok ? '#6fdc8c' : '#ff7b7b') : 'inherit') + '">' + esc(msg) + '</span>';
+                    if (skipped.length) {
+                        html += '<br><details><summary>' + skipped.length + ' file(s) with names that could not be read</summary><pre style="white-space:pre-wrap">' +
+                            esc(skipped.join('\n')) + '</pre></details>';
+                    }
+                    page.querySelector('#ptbStatus').innerHTML = html;
+                }).catch(function () {
+                    page.querySelector('#ptbStatus').textContent = 'Could not read the status.';
+                });
+            }
+
+            page.addEventListener('pageshow', function () {
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                    fields.forEach(function (f) { page.querySelector('#' + f).value = config[f] || ''; });
+                    checks.forEach(function (c) { page.querySelector('#' + c).checked = !!config[c]; });
+                    Dashboard.hideLoadingMsg();
+                });
+                loadStatus();
+            });
+
+            page.querySelector('#PhoenicxTorBoxForm').addEventListener('submit', function (e) {
+                e.preventDefault();
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                    fields.forEach(function (f) { config[f] = page.querySelector('#' + f).value.trim(); });
+                    checks.forEach(function (c) { config[c] = page.querySelector('#' + c).checked; });
+                    ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
+                        Dashboard.processPluginConfigurationUpdateResult(result);
+                        loadStatus();
+                    });
+                });
+                return false;
+            });
+
+            page.querySelector('#ptbTest').addEventListener('click', function () {
+                getJson('PhoenicxTorBox/Test').then(function (r) {
+                    Dashboard.alert((r.ok ? '✔ ' : '✖ ') + r.message + (r.ok ? '' : '\n(Save the key first.)'));
+                });
+            });
+
+            page.querySelector('#ptbSync').addEventListener('click', function () {
+                ApiClient.ajax({ type: 'POST', url: ApiClient.getUrl('PhoenicxTorBox/Sync') }).then(function () {
+                    Dashboard.alert('Sync started. It shows under Dashboard → Scheduled Tasks; this page updates when you reopen it.');
+                    setTimeout(loadStatus, 8000);
+                });
+            });
+        })();
+    </script>
+</div>
+</body>
+</html>
