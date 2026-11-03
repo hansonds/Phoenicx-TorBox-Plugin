@@ -33,6 +33,13 @@ public static class PlayLinks
             Encoding.ASCII.GetBytes(Sign(t, itemId, fileId)),
             Encoding.ASCII.GetBytes(sig.ToLowerInvariant()));
 
+    /// <summary>The same play link on the public address, for apps.</summary>
+    public static string ToPublic(string path, string publicUrl)
+    {
+        var i = path.IndexOf("/PhoenicxTorBox/Play/", StringComparison.OrdinalIgnoreCase);
+        return i < 0 || string.IsNullOrWhiteSpace(publicUrl) ? path : publicUrl.Trim().TrimEnd('/') + path[i..];
+    }
+
     /// <summary>Reads a play link (e.g. a media source path) back into its parts.</summary>
     public static bool TryParse(string? path, out SourceType type, out long itemId, out long fileId)
     {

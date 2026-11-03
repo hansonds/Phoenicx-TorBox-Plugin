@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using MediaBrowser.Controller;
 using MediaBrowser.Controller.Library;
 using Microsoft.Extensions.Logging;
 using PhoenicxTorBox.TorBox;
@@ -60,6 +61,7 @@ public sealed class LibrarySync
 
     private readonly TorBoxClient _torbox;
     private readonly ILibraryMonitor _monitor;
+    private readonly IServerApplicationHost _host;
     private readonly ILogger<LibrarySync> _log;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private SyncStatus? _status;
@@ -67,8 +69,9 @@ public sealed class LibrarySync
     /// <summary>
     /// Initializes a new instance of the <see cref="LibrarySync"/> class.
     /// </summary>
-    public LibrarySync(TorBoxClient torbox, ILibraryMonitor monitor, ILogger<LibrarySync> log)
+    public LibrarySync(TorBoxClient torbox, ILibraryMonitor monitor, IServerApplicationHost host, ILogger<LibrarySync> log)
     {
+        _host = host;
         _torbox = torbox;
         _monitor = monitor;
         _log = log;
@@ -150,11 +153,41 @@ public sealed class LibrarySync
         }
 
         var desired = new Dictionary<string, string>(StringComparer.Ordinal);
-        var url = cfg.PublicServerUrl.Trim();
+        // The .strm files point at this server's own local address, so Jellyfin itself (reading
+        // media info, Docker on Oracle) never needs to go out to the internet and back in.
+        // Apps never see it: the filter swaps in a TorBox link or the public address.
+        var url = LocalUrl();
+
+        // One spelling per tag ("Cinema" and "cinema" are the same folder).
+        var tagNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var t in files.SelectMany(f => f.Tags))
+        {
+            var safe = Safe(t);
+            if (safe.Length > 0)
+            {
+                tagNames.TryAdd(safe, safe);
+            }
+        }
+
+        // A movie found once with and once without a year: use the year when only one is known.
+        var yearsByTitle = movies
+            .Where(m => m.P.Year is not null)
+            .GroupBy(m => NameParser.Normalize(m.P.Title))
+            .ToDictionary(g => g.Key, g => g.Select(m => m.P.Year!.Value).Distinct().ToList());
+        for (var i = 0; i < movies.Count; i++)
+        {
+            var (p, f) = movies[i];
+            if (p.Year is null && yearsByTitle.TryGetValue(NameParser.Normalize(p.Title), out var ys) && ys.Count == 1)
+            {
+                movies[i] = (p with { Year = ys[0] }, f);
+            }
+        }
 
         // Each file goes into its tag folders (Tags/<tag>), or Movies / Shows when it has no tag.
         string[] BucketsOf(TorBoxFile f) =>
-            cfg.FoldersByTag && f.Tags.Count > 0 ? f.Tags.Select(Safe).Where(t => t.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToArray() : [string.Empty];
+            cfg.FoldersByTag && f.Tags.Count > 0
+                ? f.Tags.Select(Safe).Where(t => t.Length > 0).Select(t => tagNames[t]).Distinct(StringComparer.Ordinal).DefaultIfEmpty(string.Empty).ToArray()
+                : [string.Empty];
 
         var tagCounts = new SortedDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var movieKeys = new HashSet<string>(StringComparer.Ordinal);
@@ -205,11 +238,10 @@ public sealed class LibrarySync
                 var (s, e) = ep.Key;
                 var baseName = Safe($"{title} S{s:00}E{e:00}");
                 var seasonDir = Path.Combine(showDir, $"Season {s:00}");
-                var picks = ep.OrderByDescending(x => x.F.Size).Select(x => (x.P, x.F)).ToList();
-                foreach (var (name, pick) in VersionNames(baseName, picks))
-                {
-                    desired[Path.Combine(seasonDir, name + ".strm")] = PlayLinks.Build(url, pick.F.Source, pick.F.ItemId, pick.F.FileId);
-                }
+                // Jellyfin has no versions for episodes (a second file shows as a duplicate), so
+                // the largest file of the episode is used.
+                var best = ep.OrderByDescending(x => x.F.Size).First();
+                desired[Path.Combine(seasonDir, baseName + ".strm")] = PlayLinks.Build(url, best.F.Source, best.F.ItemId, best.F.FileId);
 
                 episodeKeys.Add(show.Key.Key + "|" + s + "|" + e);
             }
@@ -304,6 +336,24 @@ public sealed class LibrarySync
         _log.LogInformation("Phoenicx TorBox: sync done. {Message}", status.Message);
         progress?.Report(100);
         return status;
+    }
+
+    private string LocalUrl()
+    {
+        try
+        {
+            var u = _host.GetLoopbackHttpApiUrl();
+            if (!string.IsNullOrWhiteSpace(u))
+            {
+                return u.TrimEnd('/');
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "Phoenicx TorBox: no loopback address, using the public one");
+        }
+
+        return Plugin.Instance!.Configuration.PublicServerUrl.Trim().TrimEnd('/');
     }
 
     private static IEnumerable<(string Name, (ParsedName P, TorBoxFile F) Pick)> VersionNames(

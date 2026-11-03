@@ -90,6 +90,9 @@ public sealed class DirectPlayFilter : IAsyncActionFilter
         ms.IsRemote = true;
         ms.SupportsDirectPlay = true;
 
+        // The .strm files hold the server's local address; apps get the public one.
+        ms.Path = PlayLinks.ToPublic(ms.Path!, Plugin.Instance?.Configuration.PublicServerUrl ?? string.Empty);
+
         if (!freshLink)
         {
             return;

@@ -46,6 +46,9 @@ public sealed class TorBoxClient
     private readonly ILogger<TorBoxClient> _log;
     private readonly ConcurrentDictionary<string, (string Url, DateTime Expires)> _links = new();
 
+    // At most 3 link requests at once, so a library scan can't flood TorBox.
+    private readonly SemaphoreSlim _linkGate = new(3, 3);
+
     /// <summary>
     /// Initializes a new instance of the <see cref="TorBoxClient"/> class.
     /// </summary>
@@ -261,6 +264,25 @@ public sealed class TorBoxClient
             throw new InvalidOperationException("No TorBox API key set.");
         }
 
+        await _linkGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            // Another request may have fetched it while this one waited.
+            if (_links.TryGetValue(cacheKey, out hit) && hit.Expires > DateTime.UtcNow)
+            {
+                return hit.Url;
+            }
+
+            return await FetchLinkAsync(key, cacheKey, type, itemId, fileId, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _linkGate.Release();
+        }
+    }
+
+    private async Task<string> FetchLinkAsync(string key, string cacheKey, SourceType type, long itemId, long fileId, CancellationToken ct)
+    {
         using var c = NewClient(key);
         Exception? last = null;
         for (var attempt = 0; attempt < 3; attempt++)

@@ -3,7 +3,7 @@ using PhoenicxTorBox.Library;
 
 namespace PhoenicxTorBox.Tasks;
 
-/// <summary>Dashboard → Scheduled Tasks → "Sync TorBox library". Runs every 3 hours by default.</summary>
+/// <summary>Dashboard → Scheduled Tasks → "Sync TorBox library". Runs at startup and every 3 hours by default.</summary>
 public class SyncTask : IScheduledTask
 {
     private readonly LibrarySync _sync;
@@ -43,6 +43,7 @@ public class SyncTask : IScheduledTask
     {
         return
         [
+            new TaskTriggerInfo { Type = TaskTriggerInfoType.StartupTrigger },
             new TaskTriggerInfo
             {
                 Type = TaskTriggerInfoType.IntervalTrigger,
