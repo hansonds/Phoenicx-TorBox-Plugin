@@ -340,20 +340,30 @@ public sealed class LibrarySync
 
     private string LocalUrl()
     {
+        // The method name differs between Jellyfin versions, so it is looked up by name.
         try
         {
-            var u = _host.GetLoopbackHttpApiUrl();
-            if (!string.IsNullOrWhiteSpace(u))
+            var t = _host.GetType();
+            foreach (var name in new[] { "GetLoopbackHttpApiUrl", "GetApiUrlForLocalAccess" })
             {
-                return u.TrimEnd('/');
+                var m = t.GetMethods().FirstOrDefault(x => x.Name == name && x.GetParameters().All(p => p.IsOptional));
+                if (m?.Invoke(_host, m.GetParameters().Select(p => p.DefaultValue).ToArray()) is string u && u.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                {
+                    return u.TrimEnd('/');
+                }
+            }
+
+            if (t.GetProperty("HttpPort")?.GetValue(_host) is int port && port > 0)
+            {
+                return $"http://127.0.0.1:{port}";
             }
         }
         catch (Exception ex)
         {
-            _log.LogDebug(ex, "Phoenicx TorBox: no loopback address, using the public one");
+            _log.LogDebug(ex, "Phoenicx TorBox: no local address found");
         }
 
-        return Plugin.Instance!.Configuration.PublicServerUrl.Trim().TrimEnd('/');
+        return "http://127.0.0.1:8096";
     }
 
     private static IEnumerable<(string Name, (ParsedName P, TorBoxFile F) Pick)> VersionNames(
