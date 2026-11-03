@@ -27,7 +27,8 @@ public sealed record TorBoxFile(
     string FileName,
     string FullPath,
     string ItemName,
-    long Size);
+    long Size,
+    IReadOnlyList<string> Tags);
 
 /// <summary>Talks to api.torbox.app.</summary>
 public sealed class TorBoxClient
@@ -188,6 +189,7 @@ public sealed class TorBoxClient
                 }
 
                 var itemName = Str(it, "name");
+                var tags = ReadTags(it);
                 if (!it.TryGetProperty("files", out var files) || files.ValueKind != JsonValueKind.Array)
                 {
                     continue;
@@ -226,7 +228,7 @@ public sealed class TorBoxClient
                         continue;
                     }
 
-                    outList.Add(new TorBoxFile(type, itemId, fileId, shortName, full, itemName, size));
+                    outList.Add(new TorBoxFile(type, itemId, fileId, shortName, full, itemName, size, tags));
                 }
             }
 
@@ -324,6 +326,35 @@ public sealed class TorBoxClient
         }
 
         return doc;
+    }
+
+    /// <summary>The download's TorBox tags (a list, or a comma separated text).</summary>
+    private static List<string> ReadTags(JsonElement it)
+    {
+        var tags = new List<string>();
+        if (!it.TryGetProperty("tags", out var t))
+        {
+            return tags;
+        }
+
+        IEnumerable<string> raw = t.ValueKind switch
+        {
+            JsonValueKind.Array => t.EnumerateArray()
+                .Select(x => x.ValueKind == JsonValueKind.String ? x.GetString() ?? string.Empty
+                    : x.ValueKind == JsonValueKind.Object ? Str(x, "name") : string.Empty),
+            JsonValueKind.String => (t.GetString() ?? string.Empty).Split(','),
+            _ => Array.Empty<string>(),
+        };
+        foreach (var r in raw)
+        {
+            var v = r.Trim();
+            if (v.Length > 0 && !tags.Contains(v, StringComparer.OrdinalIgnoreCase))
+            {
+                tags.Add(v);
+            }
+        }
+
+        return tags;
     }
 
     private static bool IsTrue(JsonElement e, string name) =>

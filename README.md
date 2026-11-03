@@ -20,6 +20,13 @@ Made by **Hanson** — [phoenicx.org](https://phoenicx.org)
    - **Movies** library → the Movies folder
    - **Shows** library → the Shows folder
 
+### Tags → separate libraries
+
+Tag your downloads on TorBox (edit a download → Tags), e.g. `movies`, `cinema`, `tv-shows`.
+Each tag gets its own folder, `Tags/<tag>`, which you add as its own library. Downloads without a
+tag go to the normal Movies / Shows folders. Keep movies and series in different tags, and pick
+the library type (Movies or Shows) that matches. Turn this off on the plugin page if you don't want it.
+
 The library syncs every 3 hours (change it under Dashboard → Scheduled Tasks → *Sync TorBox library*).
 
 ## How it works

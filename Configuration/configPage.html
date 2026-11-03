@@ -30,6 +30,10 @@
                     <label><input is="emby-checkbox" type="checkbox" id="DirectToClients" /><span>Play straight from TorBox</span></label>
                     <div class="fieldDescription checkboxFieldDescription">Clients open the TorBox link themselves, so the video does not pass through this server.</div>
                 </div>
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label><input is="emby-checkbox" type="checkbox" id="FoldersByTag" /><span>Separate folder for each TorBox tag</span></label>
+                    <div class="fieldDescription checkboxFieldDescription">Downloads you tag on TorBox (e.g. movies, cinema, tv-shows) go into their own folder, so each tag can be its own library. Untagged ones stay in Movies / Shows. Keep movies and series in different tags.</div>
+                </div>
                 <div class="checkboxContainer">
                     <label><input is="emby-checkbox" type="checkbox" id="IncludeUsenet" /><span>Include usenet downloads</span></label>
                 </div>
@@ -56,7 +60,7 @@
             var pluginId = 'd793e3f9-364f-4640-9ebb-7c807bfcb90e';
             var page = document.querySelector('#PhoenicxTorBoxPage');
             var fields = ['TorBoxApiKey', 'PublicServerUrl', 'LibraryPath', 'NameFixes'];
-            var checks = ['DirectToClients', 'IncludeUsenet', 'IncludeWebDownloads'];
+            var checks = ['DirectToClients', 'FoldersByTag', 'IncludeUsenet', 'IncludeWebDownloads'];
 
             function esc(s) {
                 return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
@@ -75,9 +79,19 @@
                     var ok = last.Ok !== undefined ? last.Ok : last.ok;
                     var msg = last.Message || last.message || '';
                     var skipped = last.Skipped || last.skipped || [];
-                    var html = '<b>Add these two folders as libraries</b> (Dashboard → Libraries → Add Media Library):<br>' +
-                        'Movies: <code>' + esc(s.moviesPath) + '</code><br>' +
-                        'Shows: <code>' + esc(s.showsPath) + '</code><br><br>' +
+                    var tags = last.Tags || last.tags || [];
+                    var tagHtml = '';
+                    if (s.byTag && tags.length) {
+                        tagHtml = '<br><b>Tag folders</b> (add each as its own library — Movies or Shows type to match what you tagged):<br>' +
+                            tags.map(function (t) {
+                                return esc(t.Tag || t.tag) + ' (' + (t.Titles || t.titles || 0) + '): <code>' + esc(t.Path || t.path) + '</code>';
+                            }).join('<br>') + '<br>';
+                    } else if (s.byTag) {
+                        tagHtml = '<br>Tag folders appear here after a sync, once you have tagged downloads on TorBox.<br>';
+                    }
+                    var html = '<b>Add these folders as libraries</b> (Dashboard → Libraries → Add Media Library):<br>' +
+                        'Untagged movies: <code>' + esc(s.moviesPath) + '</code><br>' +
+                        'Untagged shows: <code>' + esc(s.showsPath) + '</code><br>' + tagHtml + '<br>' +
                         '<b>Last sync:</b> ' + (when ? new Date(when).toLocaleString() + ' — ' : '') +
                         '<span style="color:' + (when ? (ok ? '#6fdc8c' : '#ff7b7b') : 'inherit') + '">' + esc(msg) + '</span>';
                     if (skipped.length) {

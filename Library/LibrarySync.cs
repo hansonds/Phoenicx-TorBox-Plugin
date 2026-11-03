@@ -33,8 +33,24 @@ public sealed class SyncStatus
     /// <summary>Gets or sets files removed this run.</summary>
     public int Removed { get; set; }
 
+    /// <summary>Gets or sets the tag folders made in this run.</summary>
+    public List<TagFolder> Tags { get; set; } = new();
+
     /// <summary>Gets or sets names that could not be read (skipped).</summary>
     public List<string> Skipped { get; set; } = new();
+}
+
+/// <summary>One folder made for a TorBox tag.</summary>
+public sealed class TagFolder
+{
+    /// <summary>Gets or sets the tag.</summary>
+    public string Tag { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the folder to add as a library.</summary>
+    public string Path { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets how many movies / series it holds.</summary>
+    public int Titles { get; set; }
 }
 
 /// <summary>Turns the TorBox account into folders of .strm files for Jellyfin.</summary>
@@ -136,58 +152,89 @@ public sealed class LibrarySync
         var desired = new Dictionary<string, string>(StringComparer.Ordinal);
         var url = cfg.PublicServerUrl.Trim();
 
+        // Each file goes into its tag folders (Tags/<tag>), or Movies / Shows when it has no tag.
+        string[] BucketsOf(TorBoxFile f) =>
+            cfg.FoldersByTag && f.Tags.Count > 0 ? f.Tags.Select(Safe).Where(t => t.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToArray() : [string.Empty];
+
+        var tagCounts = new SortedDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var movieKeys = new HashSet<string>(StringComparer.Ordinal);
+        var showKeys = new HashSet<string>(StringComparer.Ordinal);
+        var episodeKeys = new HashSet<string>(StringComparer.Ordinal);
+
         // ---- Movies: one folder per title + year; several files = versions.
-        foreach (var group in movies.GroupBy(m => NameParser.Normalize(m.P.Title) + "|" + m.P.Year))
+        foreach (var group in movies
+                     .SelectMany(m => BucketsOf(m.F).Select(b => (Bucket: b, m.P, m.F)))
+                     .GroupBy(m => (m.Bucket, Key: NameParser.Normalize(m.P.Title) + "|" + m.P.Year)))
         {
             // Inside one download, several files with the same title are parts/extras: keep the largest.
             var picks = group
                 .GroupBy(m => (m.F.Source, m.F.ItemId))
                 .Select(g => g.OrderByDescending(x => x.F.Size).First())
                 .OrderByDescending(x => x.F.Size)
+                .Select(x => (x.P, x.F))
                 .ToList();
             var first = picks[0].P;
             var baseName = Safe(first.Year is { } y ? $"{first.Title} ({y})" : first.Title);
-            var dir = Path.Combine(plugin.MoviesPath, baseName);
+            var bucket = group.Key.Bucket;
+            var dir = Path.Combine(bucket.Length == 0 ? plugin.MoviesPath : Path.Combine(plugin.TagsPath, bucket), baseName);
             foreach (var (name, pick) in VersionNames(baseName, picks))
             {
                 desired[Path.Combine(dir, name + ".strm")] = PlayLinks.Build(url, pick.F.Source, pick.F.ItemId, pick.F.FileId);
             }
 
-            status.Movies++;
+            movieKeys.Add(group.Key.Key);
+            if (bucket.Length > 0)
+            {
+                tagCounts[bucket] = tagCounts.GetValueOrDefault(bucket) + 1;
+            }
         }
 
         // ---- Shows: one folder per series, Season NN folders, SxxEyy files.
-        foreach (var show in episodes.GroupBy(e => NameParser.Normalize(e.P.Title)))
+        foreach (var show in episodes
+                     .SelectMany(e => BucketsOf(e.F).Select(b => (Bucket: b, e.P, e.F)))
+                     .GroupBy(e => (e.Bucket, Key: NameParser.Normalize(e.P.Title))))
         {
             var withYear = show.FirstOrDefault(e => e.P.Year is not null);
             var title = (withYear.F is not null ? withYear.P : show.First().P).Title;
             var year = withYear.F is not null ? withYear.P.Year : null;
             var showName = Safe(year is { } y ? $"{title} ({y})" : title);
-            var showDir = Path.Combine(plugin.ShowsPath, showName);
+            var bucket = show.Key.Bucket;
+            var showDir = Path.Combine(bucket.Length == 0 ? plugin.ShowsPath : Path.Combine(plugin.TagsPath, bucket), showName);
             foreach (var ep in show.GroupBy(e => (e.P.Season!.Value, e.P.Episode!.Value)))
             {
                 var (s, e) = ep.Key;
                 var baseName = Safe($"{title} S{s:00}E{e:00}");
                 var seasonDir = Path.Combine(showDir, $"Season {s:00}");
-                var picks = ep.OrderByDescending(x => x.F.Size).ToList();
+                var picks = ep.OrderByDescending(x => x.F.Size).Select(x => (x.P, x.F)).ToList();
                 foreach (var (name, pick) in VersionNames(baseName, picks))
                 {
                     desired[Path.Combine(seasonDir, name + ".strm")] = PlayLinks.Build(url, pick.F.Source, pick.F.ItemId, pick.F.FileId);
                 }
 
-                status.Episodes++;
+                episodeKeys.Add(show.Key.Key + "|" + s + "|" + e);
             }
 
-            status.Shows++;
+            showKeys.Add(show.Key.Key);
+            if (bucket.Length > 0)
+            {
+                tagCounts[bucket] = tagCounts.GetValueOrDefault(bucket) + 1;
+            }
         }
+
+        status.Movies = movieKeys.Count;
+        status.Shows = showKeys.Count;
+        status.Episodes = episodeKeys.Count;
+        status.Tags = tagCounts.Select(kv => new TagFolder { Tag = kv.Key, Path = Path.Combine(plugin.TagsPath, kv.Key), Titles = kv.Value }).ToList();
 
         progress?.Report(60);
 
         // ---- Write the changes.
         Directory.CreateDirectory(plugin.MoviesPath);
         Directory.CreateDirectory(plugin.ShowsPath);
+        Directory.CreateDirectory(plugin.TagsPath);
         var existing = Directory.EnumerateFiles(plugin.MoviesPath, "*.strm", SearchOption.AllDirectories)
             .Concat(Directory.EnumerateFiles(plugin.ShowsPath, "*.strm", SearchOption.AllDirectories))
+            .Concat(Directory.EnumerateFiles(plugin.TagsPath, "*.strm", SearchOption.AllDirectories))
             .ToHashSet(StringComparer.Ordinal);
 
         var changedFolders = new HashSet<string>(StringComparer.Ordinal);
@@ -253,7 +300,7 @@ public sealed class LibrarySync
 
         status.Ok = true;
         status.FinishedUtc = DateTime.UtcNow;
-        status.Message = $"{status.Movies} movies, {status.Shows} series ({status.Episodes} episodes). Added {status.Added}, removed {status.Removed}.";
+        status.Message = $"{status.Movies} movies, {status.Shows} series ({status.Episodes} episodes), {status.Tags.Count} tag folder(s). Added {status.Added}, removed {status.Removed}.";
         _log.LogInformation("Phoenicx TorBox: sync done. {Message}", status.Message);
         progress?.Report(100);
         return status;
@@ -321,6 +368,13 @@ public sealed class LibrarySync
 
     private static string TopFolder(Plugin plugin, string filePath)
     {
+        var tagRel = Path.GetRelativePath(plugin.TagsPath, filePath);
+        if (!tagRel.StartsWith("..", StringComparison.Ordinal))
+        {
+            var parts = tagRel.Split(Path.DirectorySeparatorChar);
+            return parts.Length > 2 ? Path.Combine(plugin.TagsPath, parts[0], parts[1]) : Path.Combine(plugin.TagsPath, parts[0]);
+        }
+
         foreach (var root in new[] { plugin.MoviesPath, plugin.ShowsPath })
         {
             var rel = Path.GetRelativePath(root, filePath);
@@ -336,7 +390,7 @@ public sealed class LibrarySync
 
     private static void RemoveEmptyDirs(string dir, Plugin plugin)
     {
-        var stop = new[] { plugin.MoviesPath, plugin.ShowsPath, plugin.LibraryRoot };
+        var stop = new[] { plugin.MoviesPath, plugin.ShowsPath, plugin.TagsPath, plugin.LibraryRoot };
         var d = dir;
         while (!string.IsNullOrEmpty(d) && !stop.Contains(d, StringComparer.Ordinal) && Directory.Exists(d)
                && !Directory.EnumerateFileSystemEntries(d).Any())

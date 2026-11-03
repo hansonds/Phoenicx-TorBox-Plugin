@@ -35,6 +35,12 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool DirectToClients { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether tagged TorBox downloads go into a folder per tag
+    /// (Tags/&lt;tag&gt;), so each tag can be its own library. Untagged ones stay in Movies / Shows.
+    /// </summary>
+    public bool FoldersByTag { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets name fixes, one per line: <c>text in the TorBox name = Title (Year)</c>.
     /// A file whose TorBox name or file name contains the text gets that title.
     /// </summary>

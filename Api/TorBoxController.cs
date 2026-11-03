@@ -72,6 +72,7 @@ public class TorBoxController : ControllerBase
         {
             moviesPath = p.MoviesPath,
             showsPath = p.ShowsPath,
+            byTag = p.Configuration.FoldersByTag,
             hasKey = !string.IsNullOrWhiteSpace(p.Configuration.TorBoxApiKey),
             last = _sync.Status,
         };

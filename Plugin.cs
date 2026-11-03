@@ -60,6 +60,9 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// <summary>Gets the shows folder to add as a Shows library.</summary>
     public string ShowsPath => Path.Combine(LibraryRoot, "Shows");
 
+    /// <summary>Gets the folder holding one folder per TorBox tag.</summary>
+    public string TagsPath => Path.Combine(LibraryRoot, "Tags");
+
     /// <inheritdoc />
     public IEnumerable<PluginPageInfo> GetPages()
     {
