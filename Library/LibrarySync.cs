@@ -35,6 +35,12 @@ public sealed class SyncStatus
     /// <summary>Gets or sets files removed this run.</summary>
     public int Removed { get; set; }
 
+    /// <summary>Gets or sets the file count at which a big removal was held back (checked again next sync).</summary>
+    public int? HeldBackAt { get; set; }
+
+    /// <summary>Gets or sets an extra note for the plugin page.</summary>
+    public string? Note { get; set; }
+
     /// <summary>Gets or sets the number of subtitle files in the library.</summary>
     public int Subtitles { get; set; }
 
@@ -338,14 +344,26 @@ public sealed class LibrarySync
 
         var toRemove = existing.Where(p => !desired.ContainsKey(p)).ToList();
 
-        // A TorBox hiccup (empty or half list) must not wipe the library.
+        // A TorBox hiccup (empty or half list) must not wipe the library. A real big clean-up
+        // on TorBox shows the same smaller list again at the next sync, and is applied then.
+        var previousHeld = Status.HeldBackAt;
+        status.HeldBackAt = null;
         if (toRemove.Count > 10 && desired.Count < existing.Count / 2)
         {
-            _log.LogWarning(
-                "Phoenicx TorBox: TorBox returned far fewer files than before ({Now} vs {Before}); not removing anything this time",
-                desired.Count,
-                existing.Count);
-            toRemove.Clear();
+            if (previousHeld is { } held && Math.Abs(held - desired.Count) <= Math.Max(2, held / 20))
+            {
+                _log.LogInformation("Phoenicx TorBox: TorBox still has {Now} files, removing the rest", desired.Count);
+            }
+            else
+            {
+                _log.LogWarning(
+                    "Phoenicx TorBox: TorBox returned far fewer files than before ({Now} vs {Before}); removing only if the next sync shows the same",
+                    desired.Count,
+                    existing.Count);
+                status.HeldBackAt = desired.Count;
+                status.Note = $"TorBox suddenly has far fewer files ({desired.Count} vs {existing.Count}). Nothing removed yet; if it is still so at the next sync, they will be removed.";
+                toRemove.Clear();
+            }
         }
 
         foreach (var path in toRemove)
@@ -422,7 +440,7 @@ public sealed class LibrarySync
 
         status.Ok = true;
         status.FinishedUtc = DateTime.UtcNow;
-        status.Message = $"{status.Movies} movies, {status.Shows} series ({status.Episodes} episodes), {status.Tags.Count} tag folder(s). Added {status.Added}, removed {status.Removed}. Subtitles: {status.Subtitles} ({status.SubtitlesAdded} new). Libraries scanned: {status.LibrariesScanned}.";
+        status.Message = $"{status.Movies} movies, {status.Shows} series ({status.Episodes} episodes), {status.Tags.Count} tag folder(s). Added {status.Added}, removed {status.Removed}. Subtitles: {status.Subtitles} ({status.SubtitlesAdded} new). Libraries scanned: {status.LibrariesScanned}." + (status.Note is null ? string.Empty : " " + status.Note);
         _log.LogInformation("Phoenicx TorBox: sync done. {Message}", status.Message);
         progress?.Report(100);
         return status;

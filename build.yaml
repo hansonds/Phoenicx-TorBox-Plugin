@@ -1,7 +1,7 @@
 ---
 name: "Phoenicx TorBox"
 guid: "d793e3f9-364f-4640-9ebb-7c807bfcb90e"
-version: "1.4.2.0"
+version: "1.4.3.0"
 targetAbi: "12.1.0.0"
 framework: "net10.0"
 owner: "hansonds"
