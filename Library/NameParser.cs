@@ -218,7 +218,7 @@ public static class NameParser
 
     /// <summary>Key used to group files of the same title.</summary>
     public static string Normalize(string t) =>
-        Regex.Replace(t.ToLowerInvariant().Replace("&", "and", StringComparison.Ordinal), "[^a-z0-9]", string.Empty);
+        string.Concat(t.ToLowerInvariant().Replace("&", "and", StringComparison.Ordinal).Where(char.IsLetterOrDigit));
 
     /// <summary>Resolution label (2160p, 1080p, ...) for telling versions apart.</summary>
     public static string? ResolutionOf(string name)
