@@ -53,7 +53,7 @@ public sealed class DirectPlayFilter : IAsyncActionFilter
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // Never let the plugin stop a normal (non-TorBox) video from playing.
-                _log.LogWarning(ex, "Phoenicx TorBox: stream check failed, Jellyfin plays it normally");
+                _log.LogWarning(ex, "Torvia: stream check failed, Jellyfin plays it normally");
             }
         }
 
@@ -75,7 +75,7 @@ public sealed class DirectPlayFilter : IAsyncActionFilter
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                _log.LogWarning("Phoenicx TorBox: download link failed: {Msg}", ex.Message);
+                _log.LogWarning("Torvia: download link failed: {Msg}", ex.Message);
             }
 
             return;
@@ -118,7 +118,7 @@ public sealed class DirectPlayFilter : IAsyncActionFilter
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _log.LogWarning(ex, "Phoenicx TorBox: could not prepare direct play");
+            _log.LogWarning(ex, "Torvia: could not prepare direct play");
         }
     }
 
@@ -224,7 +224,7 @@ public sealed class DirectPlayFilter : IAsyncActionFilter
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Jellyfin then streams it the normal way (through the server).
-            _log.LogWarning("Phoenicx TorBox: redirect to TorBox failed, streaming through the server: {Msg}", ex.Message);
+            _log.LogWarning("Torvia: redirect to TorBox failed, streaming through the server: {Msg}", ex.Message);
             return false;
         }
     }
@@ -258,7 +258,7 @@ public sealed class DirectPlayFilter : IAsyncActionFilter
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // The .strm link still works: it redirects to TorBox when opened.
-            _log.LogWarning("Phoenicx TorBox: fresh link failed, client will use the play link: {Msg}", ex.Message);
+            _log.LogWarning("Torvia: fresh link failed, client will use the play link: {Msg}", ex.Message);
         }
     }
 }

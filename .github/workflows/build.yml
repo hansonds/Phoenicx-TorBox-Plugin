@@ -32,7 +32,7 @@ jobs:
         id: pkg
         run: |
           VER=${{ steps.v.outputs.version }}
-          ZIP="phoenicx-torbox_${VER}.zip"
+          ZIP="torvia_${VER}.zip"
           mkdir pkg && cp out/PhoenicxTorBox.dll pkg/
           (cd pkg && zip -q "../$ZIP" *)
           echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
@@ -45,7 +45,7 @@ jobs:
           VER=${{ steps.v.outputs.version }}
           gh release delete "v$VER" --yes --cleanup-tag 2>/dev/null || true
           gh release create "v$VER" "${{ steps.pkg.outputs.zip }}" \
-            --title "Phoenicx TorBox v$VER" \
+            --title "Torvia v$VER" \
             --notes "Install from the plugin repository: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/manifest.json (or raw gh-pages manifest.json)."
 
       - name: Publish manifest.json to gh-pages
@@ -58,9 +58,9 @@ jobs:
             {
               "category": "General",
               "guid": "${{ steps.v.outputs.guid }}",
-              "name": "Phoenicx TorBox",
+              "name": "Torvia",
               "owner": "${{ github.repository_owner }}",
-              "overview": "Your TorBox movies and series as Jellyfin libraries, played straight from TorBox.",
+              "overview": "Straight from TorBox to Jellyfin.",
               "description": "Reads your TorBox account and adds every finished movie and episode to Jellyfin. Watch history stays on your server for each user; the video streams from TorBox directly to the client. By Hanson - phoenicx.org",
               "imageUrl": "https://raw.githubusercontent.com/$REPO/main/logo.png",
               "versions": [

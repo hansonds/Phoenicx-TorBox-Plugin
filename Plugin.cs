@@ -8,7 +8,7 @@ using PhoenicxTorBox.Configuration;
 namespace PhoenicxTorBox;
 
 /// <summary>
-/// Phoenicx TorBox: TorBox movies and series as Jellyfin libraries, streamed straight from TorBox.
+/// Torvia: TorBox movies and series as Jellyfin libraries, streamed straight from TorBox.
 /// Made by Hanson — https://phoenicx.org
 /// </summary>
 public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
@@ -39,14 +39,14 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public string DataPath { get; }
 
     /// <inheritdoc />
-    public override string Name => "Phoenicx TorBox";
+    public override string Name => "Torvia";
 
     /// <inheritdoc />
     public override Guid Id => PluginId;
 
     /// <inheritdoc />
     public override string Description =>
-        "Your TorBox movies and series as Jellyfin libraries, played straight from TorBox. By Hanson — phoenicx.org";
+        "Torvia — straight from TorBox to Jellyfin. Your TorBox movies and series as Jellyfin libraries, played straight from TorBox. By Hanson — phoenicx.org";
 
     /// <summary>Gets the folder the .strm files go to.</summary>
     public string LibraryRoot =>
@@ -68,7 +68,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     {
         yield return new PluginPageInfo
         {
-            Name = "PhoenicxTorBox",
+            Name = "Torvia",
             EnableInMainMenu = true,
             MenuIcon = "cloud",
             EmbeddedResourcePath = GetType().Namespace + ".Configuration.configPage.html",

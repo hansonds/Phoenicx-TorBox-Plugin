@@ -1,4 +1,8 @@
-# Phoenicx TorBox — Jellyfin plugin
+<p align="center"><img src="logo.png" alt="Torvia — Straight from TorBox to Jellyfin" width="640"></p>
+
+# Torvia — Jellyfin plugin
+
+**Straight from TorBox to Jellyfin.**
 
 Your **TorBox** movies and series as normal **Jellyfin** libraries, played **straight from TorBox** to your apps.
 
@@ -12,10 +16,10 @@ Made by **Hanson** — [phoenicx.org](https://phoenicx.org)
 ## Install
 
 1. Jellyfin Dashboard → **Plugins → Repositories → +**
-   - Name: `Phoenicx`
-   - URL: `https://raw.githubusercontent.com/hansonds/Phoenicx-TorBox-Plugin/gh-pages/manifest.json`
-2. **Catalog** → install **Phoenicx TorBox** → restart Jellyfin.
-3. Dashboard → **Phoenicx TorBox**: paste your TorBox API key, check the server address, **Save**, then **Sync now**.
+   - Name: `Torvia`
+   - URL: `https://raw.githubusercontent.com/hansonds/Torvia-Jellyfin/gh-pages/manifest.json`
+2. **Catalog** → install **Torvia** → restart Jellyfin.
+3. Dashboard → **Torvia**: paste your TorBox API key, check the server address, **Save**, then **Sync now**.
 4. Add the two folders shown on the plugin page as libraries (Dashboard → Libraries → Add Media Library):
    - **Movies** library → the Movies folder
    - **Shows** library → the Shows folder

@@ -26,7 +26,7 @@ public class SyncTask : IScheduledTask
     public string Description => "Reads your TorBox account and updates the TorBox movie and series libraries.";
 
     /// <inheritdoc />
-    public string Category => "Phoenicx TorBox";
+    public string Category => "Torvia";
 
     /// <inheritdoc />
     public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)

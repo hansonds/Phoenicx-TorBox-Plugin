@@ -116,7 +116,7 @@ public sealed class LibrarySync
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _log.LogError(ex, "Phoenicx TorBox: sync failed");
+            _log.LogError(ex, "Torvia: sync failed");
             var failed = new SyncStatus { FinishedUtc = DateTime.UtcNow, Ok = false, Message = ex.Message };
             _status = failed;
             SaveStatus(failed);
@@ -357,7 +357,7 @@ public sealed class LibrarySync
         {
             // TorBox answering with nothing at all is an outage or maintenance, never a real
             // "delete everything": the library is kept as it is.
-            _log.LogWarning("Phoenicx TorBox: TorBox returned no files at all; keeping the library unchanged");
+            _log.LogWarning("Torvia: TorBox returned no files at all; keeping the library unchanged");
             status.Note = "TorBox returned no files (maintenance?). The library was kept as it is.";
             toRemove.Clear();
         }
@@ -368,12 +368,12 @@ public sealed class LibrarySync
                 && DateTime.UtcNow - since >= TimeSpan.FromHours(6)
                 && Math.Abs(held - desired.Count) <= Math.Max(2, held / 20))
             {
-                _log.LogInformation("Phoenicx TorBox: TorBox still has {Now} files, removing the rest", desired.Count);
+                _log.LogInformation("Torvia: TorBox still has {Now} files, removing the rest", desired.Count);
             }
             else
             {
                 _log.LogWarning(
-                    "Phoenicx TorBox: TorBox returned far fewer files than before ({Now} vs {Before}); removing only if the next sync shows the same",
+                    "Torvia: TorBox returned far fewer files than before ({Now} vs {Before}); removing only if the next sync shows the same",
                     desired.Count,
                     existing.Count);
                 status.HeldBackAt = desired.Count;
@@ -396,7 +396,7 @@ public sealed class LibrarySync
             }
             catch (IOException ex)
             {
-                _log.LogWarning("Phoenicx TorBox: could not remove {Path}: {Msg}", path, ex.Message);
+                _log.LogWarning("Torvia: could not remove {Path}: {Msg}", path, ex.Message);
             }
         }
 
@@ -427,7 +427,7 @@ public sealed class LibrarySync
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 subFailures++;
-                _log.LogWarning("Phoenicx TorBox: subtitle {Name} not downloaded: {Msg}", sub.FileName, ex.Message);
+                _log.LogWarning("Torvia: subtitle {Name} not downloaded: {Msg}", sub.FileName, ex.Message);
             }
         }
 
@@ -443,7 +443,7 @@ public sealed class LibrarySync
                 }
                 catch (IOException ex)
                 {
-                    _log.LogWarning("Phoenicx TorBox: could not remove {Path}: {Msg}", path, ex.Message);
+                    _log.LogWarning("Torvia: could not remove {Path}: {Msg}", path, ex.Message);
                 }
             }
         }
@@ -460,7 +460,7 @@ public sealed class LibrarySync
         status.Ok = true;
         status.FinishedUtc = DateTime.UtcNow;
         status.Message = $"{status.Movies} movies, {status.Shows} series ({status.Episodes} episodes), {status.Tags.Count} tag folder(s). Added {status.Added}, removed {status.Removed}. Subtitles: {status.Subtitles} ({status.SubtitlesAdded} new). Libraries scanned: {status.LibrariesScanned}." + (status.Note is null ? string.Empty : " " + status.Note);
-        _log.LogInformation("Phoenicx TorBox: sync done. {Message}", status.Message);
+        _log.LogInformation("Torvia: sync done. {Message}", status.Message);
         progress?.Report(100);
         return status;
     }
@@ -546,19 +546,19 @@ public sealed class LibrarySync
             found++;
             try
             {
-                _log.LogInformation("Phoenicx TorBox: scanning library {Name}", vf.Name);
+                _log.LogInformation("Torvia: scanning library {Name}", vf.Name);
                 await folder.ValidateChildren(new Progress<double>(), ct).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                _log.LogWarning(ex, "Phoenicx TorBox: scan of {Name} failed", vf.Name);
+                _log.LogWarning(ex, "Torvia: scan of {Name} failed", vf.Name);
             }
         }
 
         status.LibrariesScanned = found;
         if (found == 0)
         {
-            _log.LogInformation("Phoenicx TorBox: no Jellyfin library uses {Root} yet - add the folders as libraries", root);
+            _log.LogInformation("Torvia: no Jellyfin library uses {Root} yet - add the folders as libraries", root);
         }
     }
 
@@ -585,7 +585,7 @@ public sealed class LibrarySync
         }
         catch (Exception ex)
         {
-            _log.LogDebug(ex, "Phoenicx TorBox: no local address found");
+            _log.LogDebug(ex, "Torvia: no local address found");
         }
 
         return "http://127.0.0.1:8096";
@@ -723,7 +723,7 @@ public sealed class LibrarySync
         }
         catch (Exception ex)
         {
-            _log.LogDebug(ex, "Phoenicx TorBox: status not saved");
+            _log.LogDebug(ex, "Torvia: status not saved");
         }
     }
 }

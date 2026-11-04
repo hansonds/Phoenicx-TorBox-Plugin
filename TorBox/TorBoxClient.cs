@@ -157,7 +157,7 @@ public sealed class TorBoxClient
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                _log.LogWarning("Phoenicx TorBox: could not read {Type} list: {Msg}", PathOf(type), ex.Message);
+                _log.LogWarning("Torvia: could not read {Type} list: {Msg}", PathOf(type), ex.Message);
             }
         }
 

@@ -1,13 +1,13 @@
 ---
-name: "Phoenicx TorBox"
+name: "Torvia"
 guid: "d793e3f9-364f-4640-9ebb-7c807bfcb90e"
-version: "1.4.5.0"
+version: "1.5.0.0"
 targetAbi: "12.1.0.0"
 framework: "net10.0"
 owner: "hansonds"
-overview: "Your TorBox movies and series as Jellyfin libraries, played straight from TorBox."
+overview: "Straight from TorBox to Jellyfin."
 description: >
-  Phoenicx TorBox reads your TorBox account (torrents, usenet and web downloads) and turns every
+  Torvia reads your TorBox account (torrents, usenet and web downloads) and turns every
   finished movie and episode into a Jellyfin library item. Watch history stays on your server for
   each user, while the video itself streams from TorBox directly to the client.
 category: "General"
