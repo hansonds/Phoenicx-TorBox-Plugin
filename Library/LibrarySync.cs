@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using MediaBrowser.Controller;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using Microsoft.Extensions.Logging;
 using PhoenicxTorBox.TorBox;
@@ -34,6 +35,9 @@ public sealed class SyncStatus
     /// <summary>Gets or sets files removed this run.</summary>
     public int Removed { get; set; }
 
+    /// <summary>Gets or sets how many Jellyfin libraries use the TorBox folders.</summary>
+    public int LibrariesScanned { get; set; }
+
     /// <summary>Gets or sets the tag folders made in this run.</summary>
     public List<TagFolder> Tags { get; set; } = new();
 
@@ -62,6 +66,7 @@ public sealed class LibrarySync
     private readonly TorBoxClient _torbox;
     private readonly ILibraryMonitor _monitor;
     private readonly IServerApplicationHost _host;
+    private readonly ILibraryManager _libraryManager;
     private readonly ILogger<LibrarySync> _log;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private SyncStatus? _status;
@@ -69,8 +74,9 @@ public sealed class LibrarySync
     /// <summary>
     /// Initializes a new instance of the <see cref="LibrarySync"/> class.
     /// </summary>
-    public LibrarySync(TorBoxClient torbox, ILibraryMonitor monitor, IServerApplicationHost host, ILogger<LibrarySync> log)
+    public LibrarySync(TorBoxClient torbox, ILibraryMonitor monitor, IServerApplicationHost host, ILibraryManager libraryManager, ILogger<LibrarySync> log)
     {
+        _libraryManager = libraryManager;
         _host = host;
         _torbox = torbox;
         _monitor = monitor;
@@ -317,25 +323,47 @@ public sealed class LibrarySync
 
         progress?.Report(85);
 
-        // Ask Jellyfin to look at the changed folders only (not a full library scan).
-        foreach (var folder in changedFolders)
-        {
-            try
-            {
-                _monitor.ReportFileSystemChanged(folder);
-            }
-            catch (Exception ex)
-            {
-                _log.LogDebug(ex, "Phoenicx TorBox: refresh of {Folder} not queued", folder);
-            }
-        }
+        // Scan the Jellyfin libraries that use these folders (only those, not OneDrive etc.).
+        // Also on a run without changes, so a library added after the first sync gets filled.
+        await ScanOurLibrariesAsync(plugin, status, ct).ConfigureAwait(false);
 
         status.Ok = true;
         status.FinishedUtc = DateTime.UtcNow;
-        status.Message = $"{status.Movies} movies, {status.Shows} series ({status.Episodes} episodes), {status.Tags.Count} tag folder(s). Added {status.Added}, removed {status.Removed}.";
+        status.Message = $"{status.Movies} movies, {status.Shows} series ({status.Episodes} episodes), {status.Tags.Count} tag folder(s). Added {status.Added}, removed {status.Removed}. Libraries scanned: {status.LibrariesScanned}.";
         _log.LogInformation("Phoenicx TorBox: sync done. {Message}", status.Message);
         progress?.Report(100);
         return status;
+    }
+
+    private async Task ScanOurLibrariesAsync(Plugin plugin, SyncStatus status, CancellationToken ct)
+    {
+        var root = Path.GetFullPath(plugin.LibraryRoot).TrimEnd('/') + "/";
+        var found = 0;
+        foreach (var vf in _libraryManager.GetVirtualFolders())
+        {
+            var ours = vf.Locations?.Any(l => (Path.GetFullPath(l).TrimEnd('/') + "/").StartsWith(root, StringComparison.Ordinal)) == true;
+            if (!ours || !Guid.TryParse(vf.ItemId, out var id) || _libraryManager.GetItemById(id) is not Folder folder)
+            {
+                continue;
+            }
+
+            found++;
+            try
+            {
+                _log.LogInformation("Phoenicx TorBox: scanning library {Name}", vf.Name);
+                await folder.ValidateChildren(new Progress<double>(), ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _log.LogWarning(ex, "Phoenicx TorBox: scan of {Name} failed", vf.Name);
+            }
+        }
+
+        status.LibrariesScanned = found;
+        if (found == 0)
+        {
+            _log.LogInformation("Phoenicx TorBox: no Jellyfin library uses {Root} yet - add the folders as libraries", root);
+        }
     }
 
     private string LocalUrl()
@@ -347,7 +375,8 @@ public sealed class LibrarySync
             foreach (var name in new[] { "GetLoopbackHttpApiUrl", "GetApiUrlForLocalAccess" })
             {
                 var m = t.GetMethods().FirstOrDefault(x => x.Name == name && x.GetParameters().All(p => p.IsOptional));
-                if (m?.Invoke(_host, m.GetParameters().Select(p => p.DefaultValue).ToArray()) is string u && u.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                var args = m?.GetParameters().Select(p => p.ParameterType == typeof(bool) ? (object?)false : p.DefaultValue).ToArray();
+                if (m?.Invoke(_host, args) is string u && u.StartsWith("http", StringComparison.OrdinalIgnoreCase))
                 {
                     return u.TrimEnd('/');
                 }
