@@ -35,6 +35,12 @@ public sealed class SyncStatus
     /// <summary>Gets or sets files removed this run.</summary>
     public int Removed { get; set; }
 
+    /// <summary>Gets or sets the number of subtitle files in the library.</summary>
+    public int Subtitles { get; set; }
+
+    /// <summary>Gets or sets subtitle files downloaded this run.</summary>
+    public int SubtitlesAdded { get; set; }
+
     /// <summary>Gets or sets how many Jellyfin libraries use the TorBox folders.</summary>
     public int LibrariesScanned { get; set; }
 
@@ -123,8 +129,37 @@ public sealed class LibrarySync
         }
 
         progress?.Report(2);
-        var files = await _torbox.GetAllVideoFilesAsync(cfg.IncludeUsenet, cfg.IncludeWebDownloads, ct).ConfigureAwait(false);
+        var all = await _torbox.GetAllVideoFilesAsync(cfg.IncludeUsenet, cfg.IncludeWebDownloads, ct).ConfigureAwait(false);
         progress?.Report(40);
+        var files = all.Where(f => !f.IsSubtitle).ToList();
+        var subtitleOwner = MatchSubtitles(all.Where(f => f.IsSubtitle).ToList(), files);
+        var desiredSubs = new Dictionary<string, TorBoxFile>(StringComparer.Ordinal);
+
+        // Puts a video's subtitle files next to its .strm, named the way Jellyfin reads them:
+        // "Leo (2023).en.srt", "Leo (2023).ta.forced.srt".
+        void AddSubtitles(string strmPath, TorBoxFile video)
+        {
+            if (!subtitleOwner.TryGetValue(video, out var subs))
+            {
+                return;
+            }
+
+            var stem = strmPath[..^".strm".Length];
+            var videoStem = Path.GetFileNameWithoutExtension(video.FileName);
+            foreach (var sub in subs)
+            {
+                var (lang, kind) = SubtitleNames.Read(sub.FileName, videoStem);
+                var name = stem + (lang is null ? string.Empty : "." + lang) + (kind is null ? string.Empty : "." + kind);
+                var ext = Path.GetExtension(sub.FileName).ToLowerInvariant();
+                var path = name + ext;
+                for (var n = 2; desiredSubs.ContainsKey(path); n++)
+                {
+                    path = $"{name}.{n}{ext}";
+                }
+
+                desiredSubs[path] = sub;
+            }
+        }
 
         var fixes = ParseFixes(cfg.NameFixes);
         var status = new SyncStatus();
@@ -218,7 +253,9 @@ public sealed class LibrarySync
             var dir = Path.Combine(bucket.Length == 0 ? plugin.MoviesPath : Path.Combine(plugin.TagsPath, bucket), baseName);
             foreach (var (name, pick) in VersionNames(baseName, picks))
             {
-                desired[Path.Combine(dir, name + ".strm")] = PlayLinks.Build(url, pick.F.Source, pick.F.ItemId, pick.F.FileId);
+                var strm = Path.Combine(dir, name + ".strm");
+                desired[strm] = PlayLinks.Build(url, pick.F.Source, pick.F.ItemId, pick.F.FileId);
+                AddSubtitles(strm, pick.F);
             }
 
             movieKeys.Add(group.Key.Key);
@@ -247,7 +284,9 @@ public sealed class LibrarySync
                 // Jellyfin has no versions for episodes (a second file shows as a duplicate), so
                 // the largest file of the episode is used.
                 var best = ep.OrderByDescending(x => x.F.Size).First();
-                desired[Path.Combine(seasonDir, baseName + ".strm")] = PlayLinks.Build(url, best.F.Source, best.F.ItemId, best.F.FileId);
+                var strm = Path.Combine(seasonDir, baseName + ".strm");
+                desired[strm] = PlayLinks.Build(url, best.F.Source, best.F.ItemId, best.F.FileId);
+                AddSubtitles(strm, best.F);
 
                 episodeKeys.Add(show.Key.Key + "|" + s + "|" + e);
             }
@@ -270,9 +309,12 @@ public sealed class LibrarySync
         Directory.CreateDirectory(plugin.MoviesPath);
         Directory.CreateDirectory(plugin.ShowsPath);
         Directory.CreateDirectory(plugin.TagsPath);
-        var existing = Directory.EnumerateFiles(plugin.MoviesPath, "*.strm", SearchOption.AllDirectories)
-            .Concat(Directory.EnumerateFiles(plugin.ShowsPath, "*.strm", SearchOption.AllDirectories))
-            .Concat(Directory.EnumerateFiles(plugin.TagsPath, "*.strm", SearchOption.AllDirectories))
+        var onDisk = new[] { plugin.MoviesPath, plugin.ShowsPath, plugin.TagsPath }
+            .SelectMany(d => Directory.EnumerateFiles(d, "*", SearchOption.AllDirectories))
+            .ToList();
+        var existing = onDisk.Where(p => p.EndsWith(".strm", StringComparison.OrdinalIgnoreCase)).ToHashSet(StringComparer.Ordinal);
+        var existingSubs = onDisk
+            .Where(p => TorBoxClient.SubtitleExt.Contains(Path.GetExtension(p).TrimStart('.')))
             .ToHashSet(StringComparer.Ordinal);
 
         var changedFolders = new HashSet<string>(StringComparer.Ordinal);
@@ -321,6 +363,57 @@ public sealed class LibrarySync
             }
         }
 
+        // ---- Subtitles: download new ones (they don't change, so existing files are kept).
+        var subFailures = 0;
+        var newSubs = 0;
+        foreach (var (path, sub) in desiredSubs)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (existingSubs.Contains(path))
+            {
+                continue;
+            }
+
+            // Spread a big first download over several syncs.
+            if (newSubs >= 300)
+            {
+                break;
+            }
+
+            try
+            {
+                var bytes = await _torbox.DownloadSmallAsync(sub, ct).ConfigureAwait(false);
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                await File.WriteAllBytesAsync(path, bytes, ct).ConfigureAwait(false);
+                newSubs++;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                subFailures++;
+                _log.LogWarning("Phoenicx TorBox: subtitle {Name} not downloaded: {Msg}", sub.FileName, ex.Message);
+            }
+        }
+
+        // Remove subtitles whose movie / episode is gone (not while TorBox looked half empty).
+        if (toRemove.Count > 0 || desired.Count >= existing.Count / 2)
+        {
+            foreach (var path in existingSubs.Where(p => !desiredSubs.ContainsKey(p)))
+            {
+                try
+                {
+                    File.Delete(path);
+                    RemoveEmptyDirs(Path.GetDirectoryName(path)!, plugin);
+                }
+                catch (IOException ex)
+                {
+                    _log.LogWarning("Phoenicx TorBox: could not remove {Path}: {Msg}", path, ex.Message);
+                }
+            }
+        }
+
+        status.Subtitles = desiredSubs.Count;
+        status.SubtitlesAdded = newSubs;
+
         progress?.Report(85);
 
         // Scan the Jellyfin libraries that use these folders (only those, not OneDrive etc.).
@@ -329,10 +422,76 @@ public sealed class LibrarySync
 
         status.Ok = true;
         status.FinishedUtc = DateTime.UtcNow;
-        status.Message = $"{status.Movies} movies, {status.Shows} series ({status.Episodes} episodes), {status.Tags.Count} tag folder(s). Added {status.Added}, removed {status.Removed}. Libraries scanned: {status.LibrariesScanned}.";
+        status.Message = $"{status.Movies} movies, {status.Shows} series ({status.Episodes} episodes), {status.Tags.Count} tag folder(s). Added {status.Added}, removed {status.Removed}. Subtitles: {status.Subtitles} ({status.SubtitlesAdded} new). Libraries scanned: {status.LibrariesScanned}.";
         _log.LogInformation("Phoenicx TorBox: sync done. {Message}", status.Message);
         progress?.Report(100);
         return status;
+    }
+
+    /// <summary>
+    /// Decides which video each subtitle file belongs to, inside the same TorBox download:
+    /// same file name start, same season/episode, a folder named after the video, or (for a
+    /// movie download) the main video.
+    /// </summary>
+    private static Dictionary<TorBoxFile, List<TorBoxFile>> MatchSubtitles(List<TorBoxFile> subs, List<TorBoxFile> videos)
+    {
+        var owner = new Dictionary<TorBoxFile, List<TorBoxFile>>();
+        var videosByItem = videos.GroupBy(v => (v.Source, v.ItemId)).ToDictionary(g => g.Key, g => g.ToList());
+        foreach (var sub in subs)
+        {
+            if (!videosByItem.TryGetValue((sub.Source, sub.ItemId), out var candidates))
+            {
+                continue;
+            }
+
+            TorBoxFile? match = null;
+            if (candidates.Count == 1)
+            {
+                match = candidates[0];
+            }
+            else
+            {
+                var subStem = Path.GetFileNameWithoutExtension(sub.FileName);
+                match = candidates
+                    .Where(v => subStem.StartsWith(Path.GetFileNameWithoutExtension(v.FileName), StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(v => v.FileName.Length)
+                    .FirstOrDefault();
+
+                match ??= candidates.FirstOrDefault(v =>
+                    sub.FullPath.Contains("/" + Path.GetFileNameWithoutExtension(v.FileName) + "/", StringComparison.OrdinalIgnoreCase));
+
+                if (match is null)
+                {
+                    var sp = NameParser.ParseFile(sub.FileName, sub.FullPath, sub.ItemName);
+                    if (sp.IsEpisode)
+                    {
+                        match = candidates.FirstOrDefault(v =>
+                        {
+                            var vp = NameParser.ParseFile(v.FileName, v.FullPath, v.ItemName);
+                            return vp.Season == sp.Season && vp.Episode == sp.Episode;
+                        });
+                    }
+                }
+
+                // A movie download with an extra video: the subtitles are for the movie itself.
+                if (match is null && !candidates.Any(v => NameParser.ParseFile(v.FileName, v.FullPath, v.ItemName).IsEpisode))
+                {
+                    match = candidates.OrderByDescending(v => v.Size).First();
+                }
+            }
+
+            if (match is not null)
+            {
+                if (!owner.TryGetValue(match, out var list))
+                {
+                    owner[match] = list = new List<TorBoxFile>();
+                }
+
+                list.Add(sub);
+            }
+        }
+
+        return owner;
     }
 
     private async Task ScanOurLibrariesAsync(Plugin plugin, SyncStatus status, CancellationToken ct)

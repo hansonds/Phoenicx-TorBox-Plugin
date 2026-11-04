@@ -28,12 +28,19 @@ public sealed record TorBoxFile(
     string FullPath,
     string ItemName,
     long Size,
-    IReadOnlyList<string> Tags);
+    IReadOnlyList<string> Tags,
+    bool IsSubtitle = false);
 
 /// <summary>Talks to api.torbox.app.</summary>
 public sealed class TorBoxClient
 {
     private const string Base = "https://api.torbox.app/v1/api";
+
+    /// <summary>Subtitle file types brought along with the videos.</summary>
+    public static readonly HashSet<string> SubtitleExt = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "srt", "ass", "ssa", "vtt", "sub", "smi",
+    };
 
     private static readonly HashSet<string> VideoExt = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -215,6 +222,17 @@ public sealed class TorBoxClient
                     TryLong(f, "size", out var size);
                     var mime = Str(f, "mimetype");
                     var ext = Path.GetExtension(shortName).TrimStart('.');
+                    if (SubtitleExt.Contains(ext))
+                    {
+                        // Subtitles are tiny; anything over 5 MB is not a subtitle.
+                        if (size <= 5L * 1024 * 1024)
+                        {
+                            outList.Add(new TorBoxFile(type, itemId, fileId, shortName, full, itemName, size, tags, true));
+                        }
+
+                        continue;
+                    }
+
                     if (!VideoExt.Contains(ext) && !mime.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
                     {
                         continue;
@@ -317,6 +335,22 @@ public sealed class TorBoxClient
         }
 
         throw last ?? new InvalidOperationException("Could not get a TorBox link.");
+    }
+
+    /// <summary>Downloads a small file (a subtitle) from TorBox.</summary>
+    public async Task<byte[]> DownloadSmallAsync(TorBoxFile file, CancellationToken ct)
+    {
+        var link = await GetStreamLinkAsync(file.Source, file.ItemId, file.FileId, ct).ConfigureAwait(false);
+        using var c = _httpFactory.CreateClient("PhoenicxTorBox");
+        c.Timeout = TimeSpan.FromSeconds(60);
+        using var r = await c.GetAsync(link, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        r.EnsureSuccessStatusCode();
+        if (r.Content.Headers.ContentLength > 5L * 1024 * 1024)
+        {
+            throw new InvalidOperationException("File too large for a subtitle.");
+        }
+
+        return await r.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
     }
 
     private static async Task<JsonDocument> GetJsonAsync(HttpClient c, string url, CancellationToken ct)

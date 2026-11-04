@@ -20,6 +20,13 @@ Made by **Hanson** — [phoenicx.org](https://phoenicx.org)
    - **Movies** library → the Movies folder
    - **Shows** library → the Shows folder
 
+### Subtitles
+
+Subtitles inside the video (MKV) work as usual. Separate subtitle files in the TorBox download
+(`.srt`, `.ass`, `.ssa`, `.vtt`, `.sub`, `.smi`) are downloaded and placed next to the movie or
+episode, with the language when the file name has one (`Leo (2023).en.srt`, `Leo (2023).ta.srt`),
+so they show in every app's subtitle menu.
+
 ### Tags → separate libraries
 
 Tag your downloads on TorBox (edit a download → Tags), e.g. `movies`, `cinema`, `tv-shows`.
