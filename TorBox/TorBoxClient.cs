@@ -268,10 +268,10 @@ public sealed class TorBoxClient
     /// A fresh direct link (TorBox CDN) for one file. Links are kept for 45 minutes, because
     /// clients ask for playback info several times when starting one video.
     /// </summary>
-    public async Task<string> GetStreamLinkAsync(SourceType type, long itemId, long fileId, CancellationToken ct)
+    public async Task<string> GetStreamLinkAsync(SourceType type, long itemId, long fileId, CancellationToken ct, TimeSpan? maxAge = null)
     {
         var cacheKey = $"{ShortOf(type)}:{itemId}:{fileId}";
-        if (_links.TryGetValue(cacheKey, out var hit) && hit.Expires > DateTime.UtcNow)
+        if (_links.TryGetValue(cacheKey, out var hit) && Fresh(hit.Expires, maxAge))
         {
             return hit.Url;
         }
@@ -286,7 +286,7 @@ public sealed class TorBoxClient
         try
         {
             // Another request may have fetched it while this one waited.
-            if (_links.TryGetValue(cacheKey, out hit) && hit.Expires > DateTime.UtcNow)
+            if (_links.TryGetValue(cacheKey, out hit) && Fresh(hit.Expires, maxAge))
             {
                 return hit.Url;
             }
@@ -336,6 +336,10 @@ public sealed class TorBoxClient
 
         throw last ?? new InvalidOperationException("Could not get a TorBox link.");
     }
+
+    private static bool Fresh(DateTime expires, TimeSpan? maxAge) =>
+        expires > DateTime.UtcNow
+        && (maxAge is null || expires - TimeSpan.FromMinutes(45) > DateTime.UtcNow - maxAge.Value);
 
     /// <summary>Downloads a small file (a subtitle) from TorBox.</summary>
     public async Task<byte[]> DownloadSmallAsync(TorBoxFile file, CancellationToken ct)

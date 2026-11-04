@@ -58,6 +58,28 @@ public sealed class DirectPlayFilter : IAsyncActionFilter
         }
 
         var executed = await next().ConfigureAwait(false);
+
+        // "Download" in an app: Jellyfin would hand out the tiny .strm file. Send the real
+        // video from TorBox instead (Jellyfin has already checked the user may download).
+        if (executed.Result is PhysicalFileResult { FileName: { } strmFile }
+            && strmFile.EndsWith(".strm", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var text = (await File.ReadAllTextAsync(strmFile).ConfigureAwait(false)).Trim();
+                if (PlayLinks.TryParse(text, out var dt, out var di, out var df))
+                {
+                    var url = await _torbox.GetStreamLinkAsync(dt, di, df, context.HttpContext.RequestAborted, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
+                    executed.Result = new RedirectResult(url, permanent: false);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _log.LogWarning("Phoenicx TorBox: download link failed: {Msg}", ex.Message);
+            }
+
+            return;
+        }
         if (Plugin.Instance?.Configuration.DirectToClients != true || executed.Result is not ObjectResult { Value: { } value })
         {
             return;
@@ -229,7 +251,9 @@ public sealed class DirectPlayFilter : IAsyncActionFilter
 
         try
         {
-            ms.Path = await _torbox.GetStreamLinkAsync(type, itemId, fileId, ct).ConfigureAwait(false);
+            // The app keeps this link for the whole movie (pauses included), so it gets a new one,
+            // not one that has already been sitting in the cache for a while.
+            ms.Path = await _torbox.GetStreamLinkAsync(type, itemId, fileId, ct, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
