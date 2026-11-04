@@ -41,10 +41,20 @@ public sealed class DirectPlayFilter : IAsyncActionFilter
     {
         // Apps that play the server's own stream address (/Videos/{id}/stream?static=true):
         // answer with a redirect to TorBox, so the video still comes from TorBox, not through here.
-        if (Plugin.Instance?.Configuration.DirectToClients == true
-            && await TryRedirectStreamAsync(context).ConfigureAwait(false))
+        if (Plugin.Instance?.Configuration.DirectToClients == true)
         {
-            return;
+            try
+            {
+                if (await TryRedirectStreamAsync(context).ConfigureAwait(false))
+                {
+                    return;
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Never let the plugin stop a normal (non-TorBox) video from playing.
+                _log.LogWarning(ex, "Phoenicx TorBox: stream check failed, Jellyfin plays it normally");
+            }
         }
 
         var executed = await next().ConfigureAwait(false);
@@ -165,7 +175,9 @@ public sealed class DirectPlayFilter : IAsyncActionFilter
         }
 
         var item = _library.GetItemById(id);
-        if (item is null)
+
+        // Only TorBox .strm items; every other video is left completely to Jellyfin.
+        if (item is null || item.Path?.EndsWith(".strm", StringComparison.OrdinalIgnoreCase) != true)
         {
             return false;
         }
