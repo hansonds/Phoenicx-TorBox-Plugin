@@ -38,6 +38,9 @@ public sealed class SyncStatus
     /// <summary>Gets or sets the file count at which a big removal was held back (checked again next sync).</summary>
     public int? HeldBackAt { get; set; }
 
+    /// <summary>Gets or sets when that big removal was first seen (UTC).</summary>
+    public DateTime? HeldBackSinceUtc { get; set; }
+
     /// <summary>Gets or sets an extra note for the plugin page.</summary>
     public string? Note { get; set; }
 
@@ -347,10 +350,23 @@ public sealed class LibrarySync
         // A TorBox hiccup (empty or half list) must not wipe the library. A real big clean-up
         // on TorBox shows the same smaller list again at the next sync, and is applied then.
         var previousHeld = Status.HeldBackAt;
+        var heldSince = Status.HeldBackSinceUtc;
         status.HeldBackAt = null;
-        if (toRemove.Count > 10 && desired.Count < existing.Count / 2)
+        status.HeldBackSinceUtc = null;
+        if (desired.Count == 0 && existing.Count > 0)
         {
-            if (previousHeld is { } held && Math.Abs(held - desired.Count) <= Math.Max(2, held / 20))
+            // TorBox answering with nothing at all is an outage or maintenance, never a real
+            // "delete everything": the library is kept as it is.
+            _log.LogWarning("Phoenicx TorBox: TorBox returned no files at all; keeping the library unchanged");
+            status.Note = "TorBox returned no files (maintenance?). The library was kept as it is.";
+            toRemove.Clear();
+        }
+        else if (toRemove.Count > 10 && desired.Count < existing.Count / 2)
+        {
+            // Applied only when TorBox still shows the same smaller list at least 6 hours later.
+            if (previousHeld is { } held && heldSince is { } since
+                && DateTime.UtcNow - since >= TimeSpan.FromHours(6)
+                && Math.Abs(held - desired.Count) <= Math.Max(2, held / 20))
             {
                 _log.LogInformation("Phoenicx TorBox: TorBox still has {Now} files, removing the rest", desired.Count);
             }
@@ -361,7 +377,10 @@ public sealed class LibrarySync
                     desired.Count,
                     existing.Count);
                 status.HeldBackAt = desired.Count;
-                status.Note = $"TorBox suddenly has far fewer files ({desired.Count} vs {existing.Count}). Nothing removed yet; if it is still so at the next sync, they will be removed.";
+                status.HeldBackSinceUtc = previousHeld is { } h && Math.Abs(h - desired.Count) <= Math.Max(2, h / 20) && heldSince is not null
+                    ? heldSince
+                    : DateTime.UtcNow;
+                status.Note = $"TorBox suddenly has far fewer files ({desired.Count} vs {existing.Count}). Nothing removed yet; if TorBox still shows this after 6 hours, they will be removed.";
                 toRemove.Clear();
             }
         }
@@ -413,7 +432,7 @@ public sealed class LibrarySync
         }
 
         // Remove subtitles whose movie / episode is gone (not while TorBox looked half empty).
-        if (toRemove.Count > 0 || desired.Count >= existing.Count / 2)
+        if (desired.Count > 0 && (toRemove.Count > 0 || desired.Count >= existing.Count / 2))
         {
             foreach (var path in existingSubs.Where(p => !desiredSubs.ContainsKey(p)))
             {

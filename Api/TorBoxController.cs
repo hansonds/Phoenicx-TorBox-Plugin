@@ -58,7 +58,7 @@ public class TorBoxController : ControllerBase
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _log.LogWarning("Phoenicx TorBox: no link for {T}/{Item}/{File}: {Msg}", t, itemId, fileId, ex.Message);
-            return StatusCode(502, "TorBox did not give a link for this file. It may have been removed from TorBox.");
+            return StatusCode(503, "TorBox is not giving a link for this file right now (maintenance, or the file was removed from TorBox). Try again later.");
         }
     }
 
