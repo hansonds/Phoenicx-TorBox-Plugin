@@ -22,6 +22,11 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public string LibraryPath { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Gets or sets how often TorBox is synced, in minutes. 0 = only at startup and with "Sync now".
+    /// </summary>
+    public int SyncIntervalMinutes { get; set; } = 180;
+
     /// <summary>Gets or sets a value indicating whether usenet downloads are included.</summary>
     public bool IncludeUsenet { get; set; } = true;
 

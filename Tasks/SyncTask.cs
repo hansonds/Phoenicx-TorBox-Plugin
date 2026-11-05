@@ -39,16 +39,21 @@ public class SyncTask : IScheduledTask
     }
 
     /// <inheritdoc />
-    public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
+    public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => TriggersFor(Plugin.Instance?.Configuration.SyncIntervalMinutes ?? 180);
+
+    /// <summary>Startup sync, plus every N minutes (none when N is 0).</summary>
+    public static List<TaskTriggerInfo> TriggersFor(int minutes)
     {
-        return
-        [
-            new TaskTriggerInfo { Type = TaskTriggerInfoType.StartupTrigger },
-            new TaskTriggerInfo
+        var list = new List<TaskTriggerInfo> { new() { Type = TaskTriggerInfoType.StartupTrigger } };
+        if (minutes > 0)
+        {
+            list.Add(new TaskTriggerInfo
             {
                 Type = TaskTriggerInfoType.IntervalTrigger,
-                IntervalTicks = TimeSpan.FromHours(3).Ticks,
-            },
-        ];
+                IntervalTicks = TimeSpan.FromMinutes(Math.Max(15, minutes)).Ticks,
+            });
+        }
+
+        return list;
     }
 }

@@ -5,7 +5,7 @@
     <title>Torvia</title>
 </head>
 <body>
-<div id="PhoenicxTorBoxPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox,emby-textarea">
+<div id="PhoenicxTorBoxPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox,emby-textarea,emby-select">
     <div data-role="content">
         <div class="content-primary">
             <h2 class="sectionTitle">Torvia</h2>
@@ -26,6 +26,19 @@
                 <div class="inputContainer">
                     <input is="emby-input" type="text" id="LibraryPath" label="Library folder (optional)" />
                     <div class="fieldDescription">Leave empty to use the default folder shown above.</div>
+                </div>
+                <div class="selectContainer">
+                    <select is="emby-select" id="SyncIntervalMinutes" label="Sync interval">
+                        <option value="30">Every 30 minutes</option>
+                        <option value="60">Every hour</option>
+                        <option value="120">Every 2 hours</option>
+                        <option value="180">Every 3 hours</option>
+                        <option value="360">Every 6 hours</option>
+                        <option value="720">Every 12 hours</option>
+                        <option value="1440">Once a day</option>
+                        <option value="0">Only at startup and with Sync now</option>
+                    </select>
+                    <div class="fieldDescription">How often new and removed TorBox downloads are picked up.</div>
                 </div>
                 <div class="checkboxContainer checkboxContainer-withDescription">
                     <label><input is="emby-checkbox" type="checkbox" id="DirectToClients" /><span>Play straight from TorBox</span></label>
@@ -110,6 +123,12 @@
                 ApiClient.getPluginConfiguration(pluginId).then(function (config) {
                     fields.forEach(function (f) { page.querySelector('#' + f).value = config[f] || ''; });
                     checks.forEach(function (c) { page.querySelector('#' + c).checked = !!config[c]; });
+                    var iv = config.SyncIntervalMinutes == null ? 180 : config.SyncIntervalMinutes;
+                    var sel = page.querySelector('#SyncIntervalMinutes');
+                    if (!sel.querySelector('option[value="' + iv + '"]')) {
+                        var o = document.createElement('option'); o.value = iv; o.textContent = 'Every ' + iv + ' minutes'; sel.appendChild(o);
+                    }
+                    sel.value = String(iv);
                     Dashboard.hideLoadingMsg();
                 });
                 loadStatus();
@@ -121,6 +140,7 @@
                 ApiClient.getPluginConfiguration(pluginId).then(function (config) {
                     fields.forEach(function (f) { config[f] = page.querySelector('#' + f).value.trim(); });
                     checks.forEach(function (c) { config[c] = page.querySelector('#' + c).checked; });
+                    config.SyncIntervalMinutes = parseInt(page.querySelector('#SyncIntervalMinutes').value, 10) || 0;
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
                         Dashboard.processPluginConfigurationUpdateResult(result);
                         loadStatus();

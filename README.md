@@ -38,7 +38,7 @@ Each tag gets its own folder, `Tags/<tag>`, which you add as its own library. Do
 tag go to the normal Movies / Shows folders. Keep movies and series in different tags, and pick
 the library type (Movies or Shows) that matches. Turn this off on the plugin page if you don't want it.
 
-The library syncs every 3 hours (change it under Dashboard → Scheduled Tasks → *Sync TorBox library*).
+The library syncs at startup and every 3 hours by default. Change it with **Sync interval** on the plugin page (30 minutes to once a day, or only at startup and with *Sync now*).
 
 ## How it works
 
