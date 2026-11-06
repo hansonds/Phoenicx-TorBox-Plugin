@@ -15,7 +15,11 @@ public static class NameParser
     private const RegexOptions Ic = RegexOptions.IgnoreCase | RegexOptions.Compiled;
 
     private static readonly Regex Ext = new(@"\.[A-Za-z0-9]{2,4}$", RegexOptions.Compiled);
-    private static readonly Regex SitePrefix = new(@"^\s*(www\.)?[A-Za-z0-9\-]+\.(com|org|net|in|ws|xyz|cc|me|to|se|li|pw|lol|fans|io|co|ms|bz|ink|day|life|fyi|win|vip|art|mx|zip|boo|dad|bike|cat|rs|sx|ph|tv|gs|ac|ltd|uk|re|lc|nz|at|am)\s*[-–_]+\s*", Ic);
+    private static readonly Regex SitePrefix = new(@"^\s*(www\.)?[A-Za-z0-9\-]+\.(com|org|net|in|ws|xyz|cc|me|to|se|li|pw|lol|fans|io|co|ms|bz|ink|day|life|fyi|win|vip|art|mx|zip|boo|dad|bike|cat|rs|sx|ph|tv|gs|ac|ltd|uk|re|lc|nz|at|am|company|mov|movie|movies|dev|site|online|club|top|pro|shop|store|app|live|cfd|sbs|hair|beauty|skin|quest|icu|cyou|homes|autos|motorcycles|yachts|mom|rodeo)\s*[-–_]+\s*", Ic);
+    // Any site name starting with "www", whatever its ending: "www.5MovieRulz.company - ",
+    // "www 1TamilMV ws - ", "www_site_xyz - ".
+    private static readonly Regex WwwPrefix = new(@"^\s*www[ ._][A-Za-z0-9\-]+(?:[ ._][A-Za-z0-9\-]+){0,2}?[ ._][A-Za-z]{2,12}\s*[-–_]+\s*", Ic);
+
     private static readonly Regex GroupPrefix = new(@"^\s*[\[【][^\]】]*[\]】]\s*", RegexOptions.Compiled);
 
     private static readonly Regex[] EpPatterns =
@@ -246,6 +250,7 @@ public static class NameParser
         for (var i = 0; i < 3; i++)
         {
             var before = n;
+            n = WwwPrefix.Replace(n, string.Empty, 1);
             n = SitePrefix.Replace(n, string.Empty, 1);
             n = GroupPrefix.Replace(n, string.Empty, 1);
             if (n == before)
