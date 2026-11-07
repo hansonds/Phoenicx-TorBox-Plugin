@@ -132,11 +132,6 @@ public sealed class LibrarySync
     {
         var plugin = Plugin.Instance ?? throw new InvalidOperationException("Plugin not loaded.");
         var cfg = plugin.Configuration;
-        if (string.IsNullOrWhiteSpace(cfg.PublicServerUrl))
-        {
-            throw new InvalidOperationException("Set the public server address in the plugin settings.");
-        }
-
         progress?.Report(2);
         var all = await _torbox.GetAllVideoFilesAsync(cfg.IncludeUsenet, cfg.IncludeWebDownloads, ct).ConfigureAwait(false);
         progress?.Report(40);

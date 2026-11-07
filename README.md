@@ -19,7 +19,7 @@ Made by **Hanson** — [phoenicx.org](https://phoenicx.org)
    - Name: `Torvia`
    - URL: `https://raw.githubusercontent.com/hansonds/Torvia-Jellyfin/gh-pages/manifest.json`
 2. **Catalog** → install **Torvia** → restart Jellyfin.
-3. Dashboard → **Torvia**: paste your TorBox API key, check the server address, **Save**, then **Sync now**.
+3. Dashboard → **Torvia**: paste your TorBox API key, **Save**, then **Sync now**.
 4. Add the two folders shown on the plugin page as libraries (Dashboard → Libraries → Add Media Library):
    - **Movies** library → the Movies folder
    - **Shows** library → the Shows folder

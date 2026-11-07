@@ -95,7 +95,7 @@ public sealed class DirectPlayFilter : IAsyncActionFilter
                     {
                         if (web)
                         {
-                            await PrepareAsync(ms, true, context.HttpContext.RequestAborted).ConfigureAwait(false);
+                            await PrepareAsync(ms, true, PublicBase(context.HttpContext), context.HttpContext.RequestAborted).ConfigureAwait(false);
                         }
                         else
                         {
@@ -105,12 +105,12 @@ public sealed class DirectPlayFilter : IAsyncActionFilter
 
                     break;
                 case BaseItemDto dto:
-                    await PrepareItemAsync(dto, web).ConfigureAwait(false);
+                    await PrepareItemAsync(dto, web, PublicBase(context.HttpContext)).ConfigureAwait(false);
                     break;
                 case QueryResult<BaseItemDto> list when list.Items is not null:
                     foreach (var dto in list.Items)
                     {
-                        await PrepareItemAsync(dto, web).ConfigureAwait(false);
+                        await PrepareItemAsync(dto, web, PublicBase(context.HttpContext)).ConfigureAwait(false);
                     }
 
                     break;
@@ -122,7 +122,7 @@ public sealed class DirectPlayFilter : IAsyncActionFilter
         }
     }
 
-    private async Task PrepareItemAsync(BaseItemDto dto, bool web)
+    private async Task PrepareItemAsync(BaseItemDto dto, bool web, string publicBase)
     {
         if (dto.MediaSources is null)
         {
@@ -133,7 +133,7 @@ public sealed class DirectPlayFilter : IAsyncActionFilter
         {
             if (web)
             {
-                await PrepareAsync(ms, false, CancellationToken.None).ConfigureAwait(false);
+                await PrepareAsync(ms, false, publicBase, CancellationToken.None).ConfigureAwait(false);
             }
             else
             {
@@ -161,6 +161,26 @@ public sealed class DirectPlayFilter : IAsyncActionFilter
         return client.Contains("Jellyfin Web", StringComparison.OrdinalIgnoreCase)
             || client.Contains("Jellyfin Media Player", StringComparison.OrdinalIgnoreCase)
             || client.Contains("Jellyfin Desktop", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The address apps reach this server on: the one set on the plugin page, or else the address
+    /// the app itself used for this request (so every server works without setting anything).
+    /// </summary>
+    private static string PublicBase(HttpContext http)
+    {
+        var set = Plugin.Instance?.Configuration.PublicServerUrl?.Trim();
+        if (!string.IsNullOrEmpty(set))
+        {
+            return set.TrimEnd('/');
+        }
+
+        var r = http.Request;
+        var proto = r.Headers["X-Forwarded-Proto"].ToString().Split(',')[0].Trim();
+        var host = r.Headers["X-Forwarded-Host"].ToString().Split(',')[0].Trim();
+        var scheme = proto.Length > 0 ? proto : r.Scheme;
+        var h = host.Length > 0 ? host : r.Host.Value;
+        return $"{scheme}://{h}{r.PathBase.Value}".TrimEnd('/');
     }
 
     private static void PrepareForStreamUrl(MediaSourceInfo ms)
@@ -230,7 +250,7 @@ public sealed class DirectPlayFilter : IAsyncActionFilter
     }
 
 
-    private async Task PrepareAsync(MediaSourceInfo ms, bool freshLink, CancellationToken ct)
+    private async Task PrepareAsync(MediaSourceInfo ms, bool freshLink, string publicBase, CancellationToken ct)
     {
         if (!PlayLinks.TryParse(ms.Path, out var type, out var itemId, out var fileId))
         {
@@ -242,7 +262,7 @@ public sealed class DirectPlayFilter : IAsyncActionFilter
         ms.SupportsDirectPlay = true;
 
         // The .strm files hold the server's local address; apps get the public one.
-        ms.Path = PlayLinks.ToPublic(ms.Path!, Plugin.Instance?.Configuration.PublicServerUrl ?? string.Empty);
+        ms.Path = PlayLinks.ToPublic(ms.Path!, publicBase);
 
         if (!freshLink)
         {

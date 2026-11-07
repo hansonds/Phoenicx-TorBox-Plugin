@@ -11,10 +11,10 @@ public class PluginConfiguration : BasePluginConfiguration
     public string TorBoxApiKey { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the address clients use to reach this server, e.g. https://media.phoenicx.org.
-    /// It goes into the .strm files, so the play link works from every client.
+    /// Gets or sets the address apps use to reach this server (e.g. https://jellyfin.example.com).
+    /// Empty = automatic: the address each app used to connect.
     /// </summary>
-    public string PublicServerUrl { get; set; } = "https://media.phoenicx.org";
+    public string PublicServerUrl { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets the folder the .strm files are written to. Empty = the default folder inside
