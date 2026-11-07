@@ -20,10 +20,6 @@
                     <div class="fieldDescription">torbox.app → Settings → API key. It stays on this server; clients never see it.</div>
                 </div>
                 <div class="inputContainer">
-                    <input is="emby-input" type="text" id="PublicServerUrl" label="Public server address (optional)" placeholder="Automatic" />
-                    <div class="fieldDescription">Leave empty: each app gets the address it used to connect. Only fill it in if TorBox videos don't start behind your reverse proxy (e.g. https://jellyfin.example.com).</div>
-                </div>
-                <div class="inputContainer">
                     <input is="emby-input" type="text" id="LibraryPath" label="Library folder (optional)" />
                     <div class="fieldDescription">Leave empty to use the default folder shown above.</div>
                 </div>
@@ -73,7 +69,7 @@
         (function () {
             var pluginId = 'd793e3f9-364f-4640-9ebb-7c807bfcb90e';
             var page = document.querySelector('#PhoenicxTorBoxPage');
-            var fields = ['TorBoxApiKey', 'PublicServerUrl', 'LibraryPath', 'NameFixes'];
+            var fields = ['TorBoxApiKey', 'LibraryPath', 'NameFixes'];
             var checks = ['DirectToClients', 'FoldersByTag', 'IncludeUsenet', 'IncludeWebDownloads'];
 
             function esc(s) {
