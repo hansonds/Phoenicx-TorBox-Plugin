@@ -164,11 +164,17 @@ public sealed class DirectPlayFilter : IAsyncActionFilter
     }
 
     /// <summary>
-    /// The address apps reach this server on: the address the app itself used for this request,
-    /// so every server works without setting anything.
+    /// The address apps reach this server on: the one set on the plugin page, or else the address
+    /// the app itself used for this request (so every server works without setting anything).
     /// </summary>
     private static string PublicBase(HttpContext http)
     {
+        var set = Plugin.Instance?.Configuration.PublicServerUrl?.Trim();
+        if (!string.IsNullOrEmpty(set))
+        {
+            return set.TrimEnd('/');
+        }
+
         var r = http.Request;
         var proto = r.Headers["X-Forwarded-Proto"].ToString().Split(',')[0].Trim();
         var host = r.Headers["X-Forwarded-Host"].ToString().Split(',')[0].Trim();

@@ -11,8 +11,8 @@ public class PluginConfiguration : BasePluginConfiguration
     public string TorBoxApiKey { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets an old setting, no longer used: apps get the address they connected with.
-    /// Kept so saved settings from older versions still load.
+    /// Gets or sets the address apps use to reach this server (e.g. https://jellyfin.example.com).
+    /// Empty = automatic: the address each app used to connect.
     /// </summary>
     public string PublicServerUrl { get; set; } = string.Empty;
 
