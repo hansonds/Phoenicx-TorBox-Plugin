@@ -1,0 +1,21 @@
+[
+  {
+    "category": "General",
+    "guid": "d793e3f9-364f-4640-9ebb-7c807bfcb90e",
+    "name": "Torvia",
+    "owner": "hansonds",
+    "overview": "Straight from TorBox to Jellyfin.",
+    "description": "Reads your TorBox account and adds every finished movie and episode to Jellyfin. Watch history stays on your server for each user; the video streams from TorBox directly to the client. By Hanson - phoenicx.org",
+    "imageUrl": "https://raw.githubusercontent.com/hansonds/Torvia-Jellyfin/main/logo.png",
+    "versions": [
+      {
+        "version": "1.6.5.0",
+        "changelog": "See https://github.com/hansonds/Torvia-Jellyfin/releases",
+        "targetAbi": "12.1.0.0",
+        "sourceUrl": "https://github.com/hansonds/Torvia-Jellyfin/releases/download/v1.6.5.0/torvia_1.6.5.0.zip",
+        "checksum": "e6677797646700e76836f008bd91ff72",
+        "timestamp": "2026-11-07T12:19:41Z"
+      }
+    ]
+  }
+]
