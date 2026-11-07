@@ -44,7 +44,7 @@ The library syncs at startup and every 3 hours by default. Change it with **Sync
 
 The plugin writes a small `.strm` file for every movie and episode, e.g.
 `Movies/Dune (2021)/Dune (2021).strm`. Inside is a signed link to your server:
-`https://media.phoenicx.org/PhoenicxTorBox/Play/t/123/4?sig=…`
+`https://your-jellyfin-server/PhoenicxTorBox/Play/t/123/4?sig=…`
 
 When an app asks to play the item, the plugin gets a fresh TorBox link and gives it to the app,
 so the app streams from TorBox directly. Opening the `.strm` link itself redirects to TorBox too.
